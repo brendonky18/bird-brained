@@ -1,6 +1,7 @@
 import argparse
 import os
 from getpass import getpass
+from time import sleep
 
 from . import birdalert
 from . import ebird
@@ -21,7 +22,10 @@ def get_and_update_lists(
         life_birds = list(session.get_bird_list())
 
     with birdalert.BirdAlertSession(birdalert_user, birdalert_pass) as ba_session:
-        ba_session.upload_list(six_months_birds, f"Last 6 Months ({region.name})")
+        ba_session.upload_list(
+            six_months_birds, f"Last 6 Months ({region.proper_name})"
+        )
+        sleep(1)
         ba_session.upload_list(life_birds, f"Life List ({region.proper_name})")
 
     return 0
@@ -33,7 +37,7 @@ def main(argv):
         "-r",
         "--region",
         type=ebird.Region,
-        choices=[r.value for r in ebird.Region],
+        choices=list(ebird.Region),
         default=ebird.Region.WORLD,
         help="Choose a region to get the list for:\n"
         + ("\n".join([f"  - {r.value}: {r.proper_name}" for r in ebird.Region])),
@@ -53,4 +57,4 @@ def main(argv):
 if __name__ == "__main__":
     import sys
 
-    main(sys.argv)
+    main(sys.argv[1:])

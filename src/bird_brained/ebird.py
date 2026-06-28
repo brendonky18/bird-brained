@@ -1,8 +1,10 @@
+import calendar
 import csv
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 from io import StringIO
+from time import sleep
 from typing import Self
 
 import requests
@@ -70,12 +72,13 @@ class BirdListQuery:
     year: int | None = None
     month: int | None = None
     day: int | None = None
+    _time: str = "life"
+    _args: dict[str, str] = None
 
     def __post_init__(self):
         if self.day is not None and self.month is None:
             raise ValueError("Cannot specify day without month")
 
-    def get_args(self) -> dict[str, str]:
         args = {"r": self.region.value}
 
         if self.year is None:
@@ -91,7 +94,31 @@ class BirdListQuery:
         if self.day is not None:
             args["time"] = "day"
             args["d"] = str(self.day)
-        return args
+
+        self._args = args
+        self._time = args["time"]
+
+    def get_args(self) -> dict[str, str]:
+        return self._args
+
+    def __str__(self) -> str:
+        s = ""
+        if self._time == "life":
+            s = "All-time"
+        elif self._time == "year":
+            s = f"{self.year}"
+        elif self._time == "month":
+            assert isinstance(self.month, int)
+            s = f"{calendar.month_name[self.month]}{(' ' + str(self.year)) if self.year else ''}"
+        elif self._time == "day":
+            assert isinstance(self.day, int)
+            assert isinstance(self.month, int)
+            s = f"{calendar.month_name[self.month]} {self.day}{(' ' + str(self.year)) if self.year else ''}"
+        else:
+            raise ValueError("Time is not set")
+
+        s += f" ({self.region.proper_name})"
+        return s
 
     @classmethod
     def last_n_months(
@@ -175,6 +202,8 @@ class EBirdSession(requests.Session):
         )
         response.raise_for_status()
 
+        print(f"Got bird list for {query}")
+
         bird_list = dict()
         for row in csv.DictReader(StringIO(response.text)):
             cur_bird = BirdInfo(row["Common Name"], row["Scientific Name"])
@@ -194,6 +223,7 @@ class EBirdSession(requests.Session):
 
         # this gets the current month first
         for q in BirdListQuery.last_n_months(6, region=region):
+            sleep(1)  # rate limit
             month_list = self.get_bird_list(q)
             # do it this way to get the date of the most recent sighting
             birds = month_list | birds

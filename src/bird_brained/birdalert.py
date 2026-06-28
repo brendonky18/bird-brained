@@ -23,13 +23,11 @@ class BirdAlertSession(requests.Session):
 
         response = self.get(self._login_url)
         response.raise_for_status()
-        print(0)
-        # print(response.text)
+
         soup = BeautifulSoup(response.text, "html.parser")
         login_input = soup.find("input", attrs={"type": "hidden", "id": "csrf_token"})
         assert login_input is not None, "Login input not found"
         self._csrf_token = login_input["value"]
-        print(self._csrf_token)
 
         # send login request
         response = self.post(
@@ -45,10 +43,6 @@ class BirdAlertSession(requests.Session):
         soup = BeautifulSoup(response.text, "html.parser")
         if soup.find("div", attrs={"class": "alert-danger"}):
             raise RuntimeError("Login attempt failed")
-        print(1)
-        # print(response.headers)
-        print(response.status_code)
-        # print(response.text)
 
         return self
 
@@ -83,8 +77,6 @@ class BirdAlertSession(requests.Session):
             files={"file": ("bird_list.csv", out.getvalue())},
         )
         response.raise_for_status()
-        print(2)
-        print(response.status_code)
 
         # create bird list
         response = self.post(
@@ -93,5 +85,4 @@ class BirdAlertSession(requests.Session):
             files={"file": ("bird_list.csv", out.getvalue())},
         )
         response.raise_for_status()
-        print(3)
         print(f"Updated '{list_name}' with {len(birds)} birds")
