@@ -115,8 +115,9 @@ class BirdListQuery:
 
         # get list for the previous current year
         while cur_month <= n_months:
-            for i in range(cur_month):
-                queries.append(cls(year=cur_year, month=cur_month - i, region=region))
+            # for i in range(cur_month):
+            #     queries.append(cls(year=cur_year, month=cur_month - i, region=region))
+            queries.append(cls(year=cur_year, month=None, region=region))
             cur_year -= 1
             n_months = n_months - cur_month
             cur_month = 12
