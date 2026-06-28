@@ -94,29 +94,34 @@ class BirdListQuery:
         return args
 
     @classmethod
-    def last_6_months(
+    def last_n_months(
         cls,
+        n_months: int,
         cur_month: int = date.today().month,
         cur_year: int = date.today().year,
         region: Region = Region.WORLD,
     ) -> list[Self]:
-        """Gets the list of birds sighted in the previous 6 months of the provided date"""
+        """Gets the list of birds sighted in the previous n months of the provided date"""
 
         if not 1 <= cur_month <= 12:
             raise ValueError("cur_month must be between 1 and 12")
 
-        n_months = 6
-        queries = []
+        if n_months < 1:
+            raise ValueError("Number of months must be greater than 1")
 
         # instead of doing each month, we can just query for the list from the current year
         # plus the remaining months from the previous year
-        if cur_month <= 6:
-            n_months = 6 - cur_month
-            queries = [cls(year=cur_year, region=region)]
+        queries = []
 
-            cur_month = 12
+        # get list for the previous current year
+        while cur_month <= n_months:
+            for i in range(cur_month):
+                queries.append(cls(year=cur_year, month=cur_month - i, region=region))
             cur_year -= 1
+            n_months = n_months - cur_month
+            cur_month = 12
 
+        # get the list for the remaining months that don't make a whole year
         for i in range(n_months):
             queries.append(cls(year=cur_year, month=cur_month - i, region=region))
 
@@ -187,7 +192,7 @@ class EBirdSession(requests.Session):
         birds: dict[BirdInfo, str] = dict()
 
         # this gets the current month first
-        for q in BirdListQuery.last_6_months(region=region):
+        for q in BirdListQuery.last_n_months(6, region=region):
             month_list = self.get_bird_list(q)
             # do it this way to get the date of the most recent sighting
             birds = month_list | birds
