@@ -1,0 +1,10 @@
+[project]
+name = "bird_brained"
+version = "1.0.0"
+dependencies = [
+  "beautifulsoup4<5.0.0",
+  "requests<3.0.0",
+]
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
