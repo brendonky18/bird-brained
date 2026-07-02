@@ -42,14 +42,43 @@ def main(argv):
         help="Choose a region to get the list for:\n"
         + ("\n".join([f"  - {r.value}: {r.proper_name}" for r in ebird.Region])),
     )
+    parser.add_argument(
+        "-d",
+        "--headless",
+        action="store_true",
+        help="Don't prompt the user for login credentials.\n"
+        "Credentials must be provided in environment variables, or the program will exit.",
+    )
 
     args = parser.parse_args(argv)
 
+    ebird_user = os.environ.get("EBIRD_USER")
+    ebird_pass = os.environ.get("EBIRD_PASS")
+    birdalert_user = os.environ.get("BIRDALERT_USER")
+    birdalert_pass = os.environ.get("BIRDALERT_PASS")
+
+    if ebird_user is None:
+        if args.headless:
+            raise RuntimeError("EBird username not found")
+        ebird_user = input("EBird username: ")
+    if ebird_pass is None:
+        if args.headless:
+            raise RuntimeError("EBird password not found")
+        ebird_pass = getpass("EBird password: ")
+    if birdalert_user is None:
+        if args.headless:
+            raise RuntimeError("birdalert username not found")
+        birdalert_user = input("birdalert username: ")
+    if birdalert_pass is None:
+        if args.headless:
+            raise RuntimeError("birdalert password not found")
+        birdalert_pass = getpass("birdalert password: ")
+
     get_and_update_lists(
-        os.environ.get("EBIRD_USER") or input("EBird username: "),
-        os.environ.get("EBIRD_PASS") or getpass("EBird password: "),
-        os.environ.get("BIRDALERT_USER") or input("birdalert username: "),
-        os.environ.get("BIRDALERT_PASS") or getpass("birdalert password: "),
+        ebird_user,
+        ebird_pass,
+        birdalert_user,
+        birdalert_pass,
         region=args.region,
     )
 
