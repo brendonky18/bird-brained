@@ -73,7 +73,6 @@ class BirdListQuery:
     month: int | None = None
     day: int | None = None
     _time: str = "life"
-    _args: dict[str, str] = None
 
     def __post_init__(self):
         if self.day is not None and self.month is None:
