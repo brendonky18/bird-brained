@@ -19,7 +19,9 @@ def get_and_update_lists(
         six_months_birds = list(
             session.get_last_6_months_list(region=ebird.Region(region))
         )
-        life_birds = list(session.get_bird_list())
+        life_birds = list(
+            session.get_bird_list(query=ebird.BirdListQuery(region=region))
+        )
 
     with birdalert.BirdAlertSession(birdalert_user, birdalert_pass) as ba_session:
         ba_session.upload_list(
