@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 from io import StringIO
+from pathlib import Path
 from time import sleep
 from typing import Self
 
@@ -100,6 +101,25 @@ class BirdListQuery:
     def get_args(self) -> dict[str, str]:
         return self._args
 
+    @property
+    def is_current(self) -> bool:
+        """Returns True if the query is for the current day, month or year"""
+        today = date.today()
+        if self._time == "life":
+            return False
+        elif self._time == "year":
+            return self.year == today.year
+        elif self._time == "month":
+            return self.year == today.year and self.month == today.month
+        elif self._time == "day":
+            return (
+                self.year == today.year
+                and self.month == today.month
+                and self.day == today.day
+            )
+        else:
+            raise ValueError(f"{self._time}: unknown query time value")
+
     def __str__(self) -> str:
         s = ""
         if self._time == "life":
@@ -160,10 +180,14 @@ class EBirdSession(requests.Session):
 
     _url: str = "https://ebird.org/home"
 
-    def __init__(self, username: str, password: str) -> None:
+    def __init__(self, username: str, password: str, cache: Path | None = None) -> None:
         super().__init__()
         self.username = username
         self.password = password
+        self.cache = cache
+
+        if cache is not None:
+            cache.mkdir(parents=True, exist_ok=True)
 
     def __enter__(self) -> Self:
         super().__enter__()
@@ -195,16 +219,31 @@ class EBirdSession(requests.Session):
         self, query: BirdListQuery = BirdListQuery()
     ) -> dict[BirdInfo, str]:
         """Gets a list of birds for the provided query."""
+        cache_path = None
+        if self.cache is not None:
+            cache_path = self.cache / f"{query!s}.csv"
 
-        response = self.get(
-            "https://ebird.org/lifelist", query.get_args() | {"fmt": "csv"}
-        )
-        response.raise_for_status()
+        if cache_path is not None and cache_path.exists() and not query.is_current:
+            print(f"Using cached bird list for {query} at {cache_path!s}")
+            text = cache_path.read_text()
+        else:
+            sleep(1)  # rate limit
+            print(f"Downloading bird list for {query}")
+            response = self.get(
+                "https://ebird.org/lifelist", query.get_args() | {"fmt": "csv"}
+            )
+            response.raise_for_status()
+            text = response.text
+
+            # save result to the cache
+            if cache_path is not None and not query.is_current:
+                print(f"Saving bird list for {query} at {cache_path!s}")
+                cache_path.write_text(text)
 
         print(f"Got bird list for {query}")
 
         bird_list = dict()
-        for row in csv.DictReader(StringIO(response.text)):
+        for row in csv.DictReader(StringIO(text)):
             cur_bird = BirdInfo(row["Common Name"], row["Scientific Name"])
             if cur_bird not in bird_list:
                 bird_list[cur_bird] = row["Date"]
@@ -222,7 +261,6 @@ class EBirdSession(requests.Session):
 
         # this gets the current month first
         for q in BirdListQuery.last_n_months(6, region=region):
-            sleep(1)  # rate limit
             month_list = self.get_bird_list(q)
             # do it this way to get the date of the most recent sighting
             birds = month_list | birds

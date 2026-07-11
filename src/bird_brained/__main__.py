@@ -1,6 +1,7 @@
 import argparse
 import os
 from getpass import getpass
+from pathlib import Path
 from time import sleep
 
 from . import birdalert
@@ -13,14 +14,19 @@ def get_and_update_lists(
     birdalert_user: str,
     birdalert_pass: str,
     region: ebird.Region = ebird.Region.WORLD,
+    cache: Path | None = None,
 ) -> int:
     """Downloads the list of birds seen for the last 6 months, and the life list, and uploads them to birdalerts.info"""
-    with ebird.EBirdSession(ebird_user, ebird_pass) as session:
+    with ebird.EBirdSession(ebird_user, ebird_pass, cache=cache) as session:
         six_months_birds = list(
             session.get_last_6_months_list(region=ebird.Region(region))
         )
+        # TODO: check if the correct time span is being applied for the list
+        # TODO: add logging
         life_birds = list(
-            session.get_bird_list(query=ebird.BirdListQuery(region=region))
+            session.get_bird_list(
+                query=ebird.BirdListQuery(region=region, _time="life")
+            )
         )
 
     with birdalert.BirdAlertSession(birdalert_user, birdalert_pass) as ba_session:
@@ -50,6 +56,13 @@ def main(argv):
         action="store_true",
         help="Don't prompt the user for login credentials.\n"
         "Credentials must be provided in environment variables, or the program will exit.",
+    )
+    parser.add_argument(
+        "-c",
+        "--cache",
+        type=Path,
+        help="Path to the cache directory.",
+        default=None,
     )
 
     args = parser.parse_args(argv)
@@ -82,6 +95,7 @@ def main(argv):
         birdalert_user,
         birdalert_pass,
         region=args.region,
+        cache=args.cache,
     )
 
 
