@@ -343,7 +343,7 @@ class EBirdSession(requests.Session):
 
         return Region(result["code"], result["name"])
 
-    def get_region(self, search_str: str) -> Region:
+    def get_region(self, name_or_code: str) -> Region:
         """
         Gets the region that matches the provided search string
 
@@ -355,7 +355,48 @@ class EBirdSession(requests.Session):
         first result, that region will be returned.
         If it cannot find a matching region, an exception will be raised.
         """
-        if all(part.isupper() for part in search_str.split("-")):
-            return self.get_region_from_code(search_str)
+        if all(part.isupper() for part in name_or_code.split("-")):
+            return self.get_region_from_code(name_or_code)
         else:
-            return self.get_region_from_name(search_str)
+            return self.get_region_from_name(name_or_code)
+
+    def get_personal_location_from_name(self, name: str) -> Region:
+        url = f"https://ebird.org/myLocations/find"
+        response = self.get(url, params={"q": name})
+        response.raise_for_status()
+
+        results = response.json()
+        # check if there is an exact match for the name
+        for r in results:
+            if r["name"] == name:
+                return Region(r["code"], name)
+        n = len(results)
+        if n > 1:
+
+            raise ValueError(
+                f"{name}: found {n} matching location{'' if n == 1 else 's'}:\n{'\n'.join(f"- {r['name']}" for r in results)}"
+            )
+
+        return Region(results[0]["code"], name)
+
+    def get_personal_location_from_code(self, code: str) -> Region:
+        url = f"https://ebird.org/lifelist/{code}"
+        response = self.get(url)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # retrieve the proper name of the location
+        name_element = soup.find(
+            "span", attrs={"class": ["Heading-main", "u-inline-sm"]}
+        )
+        assert name_element is not None
+
+        return Region(code, name_element.text)
+
+    def get_personal_location(self, name_or_code: str) -> Region:
+        if name_or_code[0] == "L" and name_or_code[1:].isdigit:
+            return self.get_personal_location_from_code(name_or_code)
+        else:
+            return self.get_personal_location_from_name(name_or_code)
+
