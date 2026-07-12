@@ -1,13 +1,16 @@
 import calendar
 import csv
 import re
+import time
 from dataclasses import dataclass
 from datetime import date
+from datetime import datetime
+from datetime import timedelta
 from enum import Enum
 from enum import auto
 from io import StringIO
 from pathlib import Path
-from time import sleep
+from random import randint
 from typing import NamedTuple
 from typing import Self
 from urllib.parse import parse_qs
@@ -230,6 +233,9 @@ class BirdListQuery:
 class EBirdSession(requests.Session):
     """Starts a session that is authenticated to ebird.org"""
 
+    _delay: int = 2000  # the amount of milliseconds to wait between sending requests
+    _jitter: int = 500  # the amount of milliseconds to add or subtract from the delay
+
     _url: str = "https://ebird.org/home"
     _api_key: str
 
@@ -238,6 +244,8 @@ class EBirdSession(requests.Session):
         self.username = username
         self.password = password
         self.cache = cache
+
+        self._next_request = datetime.now()
 
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -276,6 +284,17 @@ class EBirdSession(requests.Session):
 
         return self
 
+    def request(self, *args, **kwargs):
+        now = datetime.now()
+        if now < self._next_request:
+            time.sleep((self._next_request - now).total_seconds())
+
+        jitter = randint(-self._jitter, self._jitter)
+        self._next_request = datetime.now() + timedelta(
+            milliseconds=self._delay + jitter
+        )
+        return super().request(*args, **kwargs)
+
     def get_bird_list(
         self, query: BirdListQuery = BirdListQuery()
     ) -> dict[BirdInfo, str]:
@@ -288,7 +307,6 @@ class EBirdSession(requests.Session):
             print(f"Using cached bird list for {query} at {cache_path!s}")
             text = cache_path.read_text()
         else:
-            sleep(1)  # rate limit
             print(f"Downloading bird list for {query}")
             response = self.get(
                 "https://ebird.org/lifelist", query.get_args() | {"fmt": "csv"}

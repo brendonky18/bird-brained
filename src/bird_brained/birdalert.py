@@ -1,5 +1,9 @@
 import csv
+import time
+from datetime import datetime
+from datetime import timedelta
 from io import StringIO
+from random import randint
 from typing import Self
 
 import requests
@@ -11,11 +15,17 @@ from .data import BirdInfo
 class BirdAlertSession(requests.Session):
     """Starts a session that is authenticated to birdalerts.info"""
 
+    _delay: int = 2000  # the amount of milliseconds to wait between sending requests
+    _jitter: int = 500  # the amount of milliseconds to add or subtract from the delay
+
     _login_url = "https://birdalerts.info/login"
 
     def __init__(self, username: str, password: str):
         self.username = username
         self.password = password
+
+        self._next_request = datetime.now()
+
         super().__init__()
 
     def __enter__(self) -> Self:
@@ -45,6 +55,17 @@ class BirdAlertSession(requests.Session):
             raise RuntimeError("Login attempt failed")
 
         return self
+
+    def request(self, *args, **kwargs):
+        now = datetime.now()
+        if now < self._next_request:
+            time.sleep((self._next_request - now).total_seconds())
+
+        jitter = randint(-self._jitter, self._jitter)
+        self._next_request = datetime.now() + timedelta(
+            milliseconds=self._delay + jitter
+        )
+        return super().request(*args, **kwargs)
 
     def upload_list(self, birds: list[BirdInfo], list_name: str):
         """Uploads the provided birds and creates a list with the provided name."""
