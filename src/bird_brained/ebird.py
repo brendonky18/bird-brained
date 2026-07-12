@@ -313,7 +313,7 @@ class EBirdSession(requests.Session):
             return Region(result["code"], result["name"])
         p = r"(, [\w ]+)*?, ".join(
             [
-                f"({part})" if i == 0 else f"({part})?"
+                f"({re.escape(part)})" if i == 0 else f"({re.escape(part)})?"
                 for i, part in enumerate(name.split(", "))
             ]
         )
