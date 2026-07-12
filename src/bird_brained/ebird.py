@@ -400,3 +400,14 @@ class EBirdSession(requests.Session):
         else:
             return self.get_personal_location_from_name(name_or_code)
 
+    def location_has_checklists(self, code: str) -> bool:
+        url = f"https://ebird.org/lifelist/{code}"
+        response = self.get(url)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        result = soup.find(
+            "section", attrs={"id": "updated-sort", "class": "Page-section"}
+        )
+        return result is not None
