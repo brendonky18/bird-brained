@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from enum import auto
 from io import StringIO
 from pathlib import Path
 from time import sleep
@@ -18,14 +19,14 @@ from bs4 import BeautifulSoup
 from .data import BirdInfo
 
 
-class Region(NamedTuple):
-    """Corresponds to a location, region, or major region as defined by ebird.org"""
+class Location(NamedTuple):
+    """Corresponds to a personal location/hotspot, region, or major region as defined by ebird.org"""
 
     code: str
     proper_name: str
 
 
-class MajorRegion(Region, Enum):
+class MajorRegion(Location, Enum):
     """The major regions used by ebird.org"""
 
     WORLD = ("world", "World")
@@ -64,12 +65,44 @@ class MajorRegion(Region, Enum):
     MALAYSIA_PENINSULA = ("mypeninsula", "Malaysia (Peninsula)")
     MAINLAND_PORTUGAL = ("mainlandpt", "Mainland Portugal")
 
+    @classmethod
+    def by_name(cls, name: str) -> Self:
+        for region in cls:
+            if region.proper_name == name:
+                return region
+        raise ValueError(f'No such major region named "{name}"')
+
+    @classmethod
+    def by_code(cls, code: str) -> Self:
+        for region in cls:
+            if region.code == code:
+                return region
+        raise ValueError(f'No such major region with code "{code}"')
+
+    @classmethod
+    def by_name_or_code(cls, name_or_code) -> Self:
+        codes, names = zip(*cls)
+        if name_or_code in names:
+            return cls.by_name(name_or_code)
+        elif name_or_code in codes:
+            return cls.by_code(name_or_code)
+        else:
+            raise ValueError(
+                f"{name_or_code}: not a valid name or code for any major region"
+            )
+
+
+class LocationType(Enum):
+    MAJOR_REGION = auto()
+    REGION = auto()
+    LOCATION = auto()
+
 
 @dataclass
 class BirdListQuery:
     """Creates a filter for a bird list"""
 
-    region: Region = MajorRegion.WORLD
+    location: Location = MajorRegion.WORLD
     year: int | None = None
     month: int | None = None
     day: int | None = None
@@ -79,7 +112,7 @@ class BirdListQuery:
         if self.day is not None and self.month is None:
             raise ValueError("Cannot specify day without month")
 
-        args = {"r": self.region.code}
+        args = {"r": self.location.code}
 
         if self.year is None:
             args["time"] = "life"
@@ -136,7 +169,26 @@ class BirdListQuery:
         else:
             raise ValueError("Time is not set")
 
-        s += f" ({self.region.proper_name})"
+        s += f" ({self.location.proper_name})"
+        return s
+
+    def __repr__(self) -> str:
+        s = ""
+        if self._time == "life":
+            s = "0000-00-00"
+        elif self._time == "year":
+            s = f"{self.year}"
+        elif self._time == "month":
+            assert isinstance(self.month, int)
+            s = f"{self.year if self.year else 0:04}-{self.month:02}-00"
+        elif self._time == "day":
+            assert isinstance(self.day, int)
+            assert isinstance(self.month, int)
+            s = f"{self.year if self.year else 0:04}-{self.month:02}-{self.day:02}"
+        else:
+            raise ValueError("Time is not set")
+
+        s += f"_{self.location.code}"
         return s
 
     @classmethod
@@ -145,7 +197,7 @@ class BirdListQuery:
         n_months: int,
         cur_month: int = date.today().month,
         cur_year: int = date.today().year,
-        region: Region = MajorRegion.WORLD,
+        location: Location = MajorRegion.WORLD,
     ) -> list[Self]:
         """Gets the list of birds sighted in the previous n months of the provided date"""
 
@@ -163,14 +215,14 @@ class BirdListQuery:
         while cur_month <= n_months:
             # for i in range(cur_month):
             #     queries.append(cls(year=cur_year, month=cur_month - i, region=region))
-            queries.append(cls(year=cur_year, month=None, region=region))
+            queries.append(cls(year=cur_year, month=None, location=location))
             cur_year -= 1
             n_months = n_months - cur_month
             cur_month = 12
 
         # get the list for the remaining months that don't make a whole year
         for i in range(n_months):
-            queries.append(cls(year=cur_year, month=cur_month - i, region=region))
+            queries.append(cls(year=cur_year, month=cur_month - i, location=location))
 
         return queries
 
@@ -230,7 +282,7 @@ class EBirdSession(requests.Session):
         """Gets a list of birds for the provided query."""
         cache_path = None
         if self.cache is not None:
-            cache_path = self.cache / f"lists/{query!s}.csv"
+            cache_path = self.cache / f"lists/{query.location.code}/{query!r}.csv"
 
         if cache_path is not None and cache_path.exists() and not query.is_current:
             print(f"Using cached bird list for {query} at {cache_path!s}")
@@ -247,6 +299,7 @@ class EBirdSession(requests.Session):
             # save result to the cache
             if cache_path is not None and not query.is_current:
                 print(f"Saving bird list for {query} at {cache_path!s}")
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
                 cache_path.write_text(text)
 
         print(f"Got bird list for {query}")
@@ -260,7 +313,7 @@ class EBirdSession(requests.Session):
         return bird_list
 
     def get_last_6_months_list(
-        self, region: Region = MajorRegion.WORLD
+        self, region: Location = MajorRegion.WORLD
     ) -> dict[BirdInfo, str]:
         """Gets the list of birds seen in the previous 6 months"""
 
@@ -269,14 +322,17 @@ class EBirdSession(requests.Session):
         birds: dict[BirdInfo, str] = dict()
 
         # this gets the current month first
-        for q in BirdListQuery.last_n_months(6, region=region):
+        for q in BirdListQuery.last_n_months(6, location=region):
             month_list = self.get_bird_list(q)
             # do it this way to get the date of the most recent sighting
             birds = month_list | birds
 
         return birds
 
-    def get_region_from_code(self, region_code: str) -> Region:
+    def get_major_region(self, name_or_code: str) -> Location:
+        return MajorRegion.by_name_or_code(name_or_code)
+
+    def get_region_from_code(self, region_code: str) -> Location:
         if any(len(s) > 3 or not s.isupper() for s in region_code.split("-")):
             raise ValueError(f"{region_code}: invalid region code")
         response = self.get(f"https://ebird.org/lifelist/{region_code}")
@@ -289,9 +345,9 @@ class EBirdSession(requests.Session):
         if region_header is None:
             raise ValueError(f"{region_code}: could not find region")
 
-        return Region(region_code, region_header.text.strip())
+        return Location(region_code, region_header.text.strip())
 
-    def get_region_from_name(self, name: str) -> Region:
+    def get_region_from_name(self, name: str) -> Location:
         response = self.get(
             "https://api.ebird.org/v2/ref/region/find",
             params={
@@ -310,14 +366,13 @@ class EBirdSession(requests.Session):
         # I want to ignore the country codes in the names => strip the last 4 characters off of the end of the name, since that will always be the country code
         result = results[0]
         if len(results) == 1:
-            return Region(result["code"], result["name"])
+            return Location(result["code"], result["name"])
         p = r"(, [\w ]+)*?, ".join(
             [
                 f"({re.escape(part)})" if i == 0 else f"({re.escape(part)})?"
                 for i, part in enumerate(name.split(", "))
             ]
         )
-        print(p)
         search_pattern = re.compile(p)
 
         matches = re.match(search_pattern, result["name"])
@@ -341,9 +396,9 @@ class EBirdSession(requests.Session):
                 f"Multiple possible matches for \"{name}\":\n{'\n'.join(f"- {m}" for m in equivalent_matches)}"
             )
 
-        return Region(result["code"], result["name"])
+        return Location(result["code"], result["name"])
 
-    def get_region(self, name_or_code: str) -> Region:
+    def get_region(self, name_or_code: str) -> Location:
         """
         Gets the region that matches the provided search string
 
@@ -360,7 +415,7 @@ class EBirdSession(requests.Session):
         else:
             return self.get_region_from_name(name_or_code)
 
-    def get_personal_location_from_name(self, name: str) -> Region:
+    def get_personal_location_from_name(self, name: str) -> Location:
         url = f"https://ebird.org/myLocations/find"
         response = self.get(url, params={"q": name})
         response.raise_for_status()
@@ -368,8 +423,11 @@ class EBirdSession(requests.Session):
         results = response.json()
         # check if there is an exact match for the name
         for r in results:
+            # strip off the region ID from the end of the returned name,
+            # since that doesn't appear in the search menu
+            r["name"] = r["name"].rsplit(", ", 1)[0]
             if r["name"] == name:
-                return Region(r["code"], name)
+                return Location(r["code"], name)
         n = len(results)
         if n > 1:
 
@@ -377,9 +435,9 @@ class EBirdSession(requests.Session):
                 f"{name}: found {n} matching location{'' if n == 1 else 's'}:\n{'\n'.join(f"- {r['name']}" for r in results)}"
             )
 
-        return Region(results[0]["code"], name)
+        return Location(results[0]["code"], name)
 
-    def get_personal_location_from_code(self, code: str) -> Region:
+    def get_personal_location_from_code(self, code: str) -> Location:
         url = f"https://ebird.org/lifelist/{code}"
         response = self.get(url)
         response.raise_for_status()
@@ -392,9 +450,10 @@ class EBirdSession(requests.Session):
         )
         assert name_element is not None
 
-        return Region(code, name_element.text)
+        return Location(code, name_element.text)
 
-    def get_personal_location(self, name_or_code: str) -> Region:
+    def get_personal_location(self, name_or_code: str) -> Location:
+        """Gets a personal location or ebird hotspot."""
         if name_or_code[0] == "L" and name_or_code[1:].isdigit:
             return self.get_personal_location_from_code(name_or_code)
         else:
