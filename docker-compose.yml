@@ -1,0 +1,13 @@
+services:
+  update-lists:
+    build:
+      context: docker
+      dockerfile: Dockerfile
+    container_name: update-lists
+    environment:
+      - EBIRD_USER=${EBIRD_USER}
+      - EBIRD_PASS=${EBIRD_PASS}
+      - BIRDALERT_USER=${BIRDALERT_USER}
+      - BIRDALERT_PASS=${BIRDALERT_PASS}
+      - EBIRD_REGION=${EBIRD_REGION}
+      - REFRESH_INTERVAL=${REFRESH_INTERVAL}
