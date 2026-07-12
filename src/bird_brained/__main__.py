@@ -13,14 +13,17 @@ def get_and_update_lists(
     ebird_pass: str,
     birdalert_user: str,
     birdalert_pass: str,
-    region: ebird.Region = ebird.Region.WORLD,
+    search_str: ebird.Region | str = ebird.MajorRegion.WORLD,
     cache: Path | None = None,
 ) -> int:
     """Downloads the list of birds seen for the last 6 months, and the life list, and uploads them to birdalerts.info"""
     with ebird.EBirdSession(ebird_user, ebird_pass, cache=cache) as session:
-        six_months_birds = list(
-            session.get_last_6_months_list(region=ebird.Region(region))
-        )
+        if isinstance(search_str, str):
+            region = session.get_region(search_str)
+        else:
+            region = search_str
+
+        six_months_birds = list(session.get_last_6_months_list(region=region))
         # TODO: check if the correct time span is being applied for the list
         # TODO: add logging
         life_birds = list(
@@ -41,15 +44,31 @@ def get_and_update_lists(
 
 def main(argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument(
+    location_mutex_group = parser.add_mutually_exclusive_group()
+    location_mutex_group.set_defaults(region=ebird.MajorRegion.WORLD, search_str=None)
+    location_mutex_group.add_argument(
+        "-R",
+        "--major-region",
+        type=ebird.MajorRegion,
+        choices=list(ebird.MajorRegion),
+        help="Choose a region to get the list for:\n"
+        + ("\n".join([f"  - {r.value}: {r.proper_name}" for r in ebird.MajorRegion])),
+    )
+    location_mutex_group.add_argument(
         "-r",
         "--region",
-        type=ebird.Region,
-        choices=list(ebird.Region),
-        default=ebird.Region.WORLD,
-        help="Choose a region to get the list for:\n"
-        + ("\n".join([f"  - {r.value}: {r.proper_name}" for r in ebird.Region])),
+        type=str,
+        dest="search_str",
+        help="Enter the name of an eBird region",
     )
+    location_mutex_group.add_argument(
+        "-l",
+        "--personal-location",
+        type=str,
+        dest="search_str",
+        help="Enter the name of one of your personal locations from eBird",
+    )
+
     parser.add_argument(
         "-d",
         "--headless",
@@ -89,12 +108,19 @@ def main(argv):
             raise RuntimeError("birdalert password not found")
         birdalert_pass = getpass("birdalert password: ")
 
+    # FIXME: searching for a personal location returns a region, because they are submitting the same query
+    # I need to figure out how to separate personal location queries from region queries, and then perform the different request
+    if args.search_str is not None:
+        region = args.search_str
+    else:
+        region = args.region
+
     get_and_update_lists(
         ebird_user,
         ebird_pass,
         birdalert_user,
         birdalert_pass,
-        region=args.region,
+        search_str=region,
         cache=args.cache,
     )
 
