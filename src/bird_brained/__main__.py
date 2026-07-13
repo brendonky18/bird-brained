@@ -33,7 +33,6 @@ def get_and_update_lists(
             raise ValueError(f"{use_location}: unknown location parameter")
 
         six_months_birds = list(session.get_last_6_months_list(region=location))
-        # TODO: add logging
         life_birds = list(
             session.get_bird_list(query=ebird.BirdListQuery(location=location))
         )

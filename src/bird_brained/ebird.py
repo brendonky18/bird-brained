@@ -335,8 +335,6 @@ class EBirdSession(requests.Session):
     ) -> dict[BirdInfo, str]:
         """Gets the list of birds seen in the previous 6 months"""
 
-        date.today().month
-
         birds: dict[BirdInfo, str] = dict()
 
         # this gets the current month first
@@ -379,9 +377,6 @@ class EBirdSession(requests.Session):
         if len(results) == 0:
             raise ValueError(f"{name}: found no matching region")
 
-        # TODO: figure out how to handle when there are multiple results
-        # what about casses like "essex" where there are multiple exact matches
-        # I want to ignore the country codes in the names => strip the last 4 characters off of the end of the name, since that will always be the country code
         result = results[0]
         if len(results) == 1:
             return Location(result["code"], result["name"])
