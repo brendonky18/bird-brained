@@ -51,26 +51,11 @@ def main(argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     location_mutex_group = parser.add_mutually_exclusive_group()
     location_mutex_group.add_argument(
-        "-R",
-        "--major-region",
-        type=str,
-        default=ebird.MajorRegion.WORLD.code,
-        help="Choose a region to get the list for:\n"
-        + ("\n".join([f"  - {r.code}: {r.proper_name}" for r in ebird.MajorRegion])),
-    )
-    location_mutex_group.add_argument(
-        "-r",
-        "--region",
-        type=str,
-        default=None,
-        help="Enter the name of an eBird region",
-    )
-    location_mutex_group.add_argument(
         "-l",
         "--location",
         type=str,
         default=None,
-        help="Enter the name of a hotspot, or one of your personal locations",
+        help="The name of a major region, region, hotspot, or one of your personal locations to retrieve the list from",
     )
 
     parser.add_argument(
@@ -112,12 +97,14 @@ def main(argv):
             raise RuntimeError("birdalert password not found")
         birdalert_pass = getpass("birdalert password: ")
 
-    if args.location is not None:
-        location = (ebird.LocationType.LOCATION, args.location)
-    elif args.region is not None:
-        location = (ebird.LocationType.REGION, args.region)
+    if args.location is None:
+        location = (
+            ebird.LocationType.MAJOR_REGION,
+            ebird.MajorRegion.WORLD.proper_name,
+        )
     else:
-        location = (ebird.LocationType.MAJOR_REGION, args.major_region)
+        type_str, name_str = args.location.split(":", 1)
+        location = (ebird.LocationType[type_str], name_str)
 
     get_and_update_lists(
         ebird_user,
