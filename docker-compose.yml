@@ -3,6 +3,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: update-lists
+    container_name: update-bird-lists
     env_file:
       - .env
