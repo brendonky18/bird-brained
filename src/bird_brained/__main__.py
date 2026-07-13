@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 from getpass import getpass
 from pathlib import Path
@@ -6,6 +7,8 @@ from time import sleep
 
 from . import birdalert
 from . import ebird
+
+log = logging.getLogger(__loader__.name.split(".")[0])
 
 
 def get_and_update_lists(
@@ -119,4 +122,14 @@ def main(argv):
 if __name__ == "__main__":
     import sys
 
+    log.setLevel(logging.DEBUG)
+    log_handler = logging.StreamHandler()
+    log_handler.setLevel(logging.DEBUG)
+    log_handler.setFormatter(
+        logging.Formatter("[%(asctime)s|%(name)s|%(levelname)s] %(message)s")
+    )
+    log.addHandler(log_handler)
+    log.debug("starting")
+
     main(sys.argv[1:])
+    log.debug("done")

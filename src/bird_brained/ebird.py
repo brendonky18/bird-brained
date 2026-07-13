@@ -1,5 +1,6 @@
 import calendar
 import csv
+import logging
 import re
 import time
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ import requests
 from bs4 import BeautifulSoup
 
 from .data import BirdInfo
+
+log = logging.getLogger(__name__)
 
 
 class Location(NamedTuple):
@@ -274,6 +277,8 @@ class EBirdSession(requests.Session):
             raise RuntimeError("Failed to authenticate")
         response.raise_for_status()
 
+        log.debug(f"logged in as {self.username}")
+
         # parse the page to get the api key
         soup = BeautifulSoup(response.text, "html.parser")
         explore_regions = soup.find("clo-suggest", attrs={"id": "exploreRegions"})
@@ -304,10 +309,10 @@ class EBirdSession(requests.Session):
             cache_path = self.cache / f"lists/{query.location.code}/{query!r}.csv"
 
         if cache_path is not None and cache_path.exists() and not query.is_current:
-            print(f"Using cached bird list for {query} at {cache_path!s}")
+            log.debug(f"Using cached bird list for {query} at {cache_path!s}")
             text = cache_path.read_text()
         else:
-            print(f"Downloading bird list for {query}")
+            log.debug(f"Downloading bird list for {query}")
             response = self.get(
                 "https://ebird.org/lifelist", query.get_args() | {"fmt": "csv"}
             )
@@ -316,11 +321,11 @@ class EBirdSession(requests.Session):
 
             # save result to the cache
             if cache_path is not None and not query.is_current:
-                print(f"Saving bird list for {query} at {cache_path!s}")
+                log.debug(f"Saving bird list for {query} at {cache_path!s}")
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 cache_path.write_text(text)
 
-        print(f"Got bird list for {query}")
+        log.info(f"Got bird list for {query}")
 
         bird_list = dict()
         for row in csv.DictReader(StringIO(text)):

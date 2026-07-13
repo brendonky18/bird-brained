@@ -1,4 +1,5 @@
 import csv
+import logging
 import time
 from datetime import datetime
 from datetime import timedelta
@@ -10,6 +11,8 @@ import requests
 from bs4 import BeautifulSoup
 
 from .data import BirdInfo
+
+log = logging.getLogger(__name__)
 
 
 class BirdAlertSession(requests.Session):
@@ -49,6 +52,7 @@ class BirdAlertSession(requests.Session):
                 "csrf_token": self._csrf_token,
             },
         )
+        log.debug(f"logged in as {self.username}")
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         if soup.find("div", attrs={"class": "alert-danger"}):
@@ -69,6 +73,7 @@ class BirdAlertSession(requests.Session):
 
     def upload_list(self, birds: list[BirdInfo], list_name: str):
         """Uploads the provided birds and creates a list with the provided name."""
+        log.debug("Uploading bird list")
 
         bird_list_upload_url = "https://birdalerts.info/upload_bird_list_file"
         bird_list_create_url = "https://birdalerts.info/create_bird_list"
@@ -106,4 +111,4 @@ class BirdAlertSession(requests.Session):
             files={"file": ("bird_list.csv", out.getvalue())},
         )
         response.raise_for_status()
-        print(f"Updated '{list_name}' with {len(birds)} birds")
+        log.info(f"Updated '{list_name}' with {len(birds)} birds")
